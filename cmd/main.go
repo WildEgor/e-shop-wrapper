@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	server "github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal"
+	server "github.com/WildEgor/e-shop-fiber-wrapper/internal"
 )
 
 // @title		Swagger Doc

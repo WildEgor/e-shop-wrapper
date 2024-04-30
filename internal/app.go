@@ -3,10 +3,12 @@ package pkg
 import (
 	"context"
 	"fmt"
-	"github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal/config"
-	eh "github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal/handlers/errors"
-	nfm "github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal/middlewares/not_found"
-	"github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal/router"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/configs"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/db"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/db/clickhouse"
+	eh "github.com/WildEgor/e-shop-fiber-wrapper/internal/handlers/errors"
+	nfm "github.com/WildEgor/e-shop-fiber-wrapper/internal/middlewares/not_found"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/router"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/recover"
@@ -18,14 +20,16 @@ import (
 
 var AppSet = wire.NewSet(
 	NewApp,
-	config.ConfigsSet,
+	configs.ConfigsSet,
 	router.RouterSet,
+	db.DbSet,
 )
 
 // Server represents the main server configuration.
 type Server struct {
-	App       *fiber.App
-	AppConfig *config.AppConfig
+	App        *fiber.App
+	AppConfig  *configs.AppConfig
+	Clickhouse *clickhouse.ClickhouseConnection
 }
 
 func (srv *Server) Run(ctx *context.Context) {
@@ -38,17 +42,21 @@ func (srv *Server) Run(ctx *context.Context) {
 
 func (srv *Server) Shutdown() {
 	slog.Info("shutdown service")
+
+	srv.Clickhouse.Disconnect()
+
 	if err := srv.App.Shutdown(); err != nil {
 		slog.Error("unable to shutdown server")
 	}
 }
 
 func NewApp(
-	ac *config.AppConfig,
+	ac *configs.AppConfig,
 	eh *eh.ErrorsHandler,
 	prr *router.PrivateRouter,
 	pbr *router.PublicRouter,
 	sr *router.SwaggerRouter,
+	ch *clickhouse.ClickhouseConnection,
 ) *Server {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
@@ -80,7 +88,8 @@ func NewApp(
 	app.Use(nfm.NewNotFound())
 
 	return &Server{
-		App:       app,
-		AppConfig: ac,
+		App:        app,
+		AppConfig:  ac,
+		Clickhouse: ch,
 	}
 }

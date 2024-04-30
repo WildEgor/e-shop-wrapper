@@ -7,26 +7,36 @@
 package pkg
 
 import (
-	"github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal/config"
-	"github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal/handlers/errors"
-	"github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal/handlers/health_check"
-	"github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal/handlers/ready_check"
-	"github.com/WildEgor/e-shop-fiber-microservice-boilerplate/internal/router"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/configs"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/db/clickhouse"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/handlers/errors"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/handlers/health_check"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/handlers/ready_check"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/handlers/sql"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/repositories"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/router"
+	"github.com/WildEgor/e-shop-fiber-wrapper/internal/services"
 	"github.com/google/wire"
 )
 
 // Injectors from server.go:
 
 func NewServer() (*Server, error) {
-	configurator := config.NewConfigurator()
-	appConfig := config.NewAppConfig(configurator)
+	configurator := configs.NewConfigurator()
+	appConfig := configs.NewAppConfig(configurator)
 	errorsHandler := error_handler.NewErrorsHandler()
-	privateRouter := router.NewPrivateRouter()
+	apiKeyConfig := configs.NewApiKeyConfig(configurator)
+	apiKeyValidator := services.NewApiKeyValidator(apiKeyConfig)
+	clickhouseConfig := configs.NewClickhouseConfig(configurator)
+	clickhouseConnection := clickhouse.NewClickhouseConnection(clickhouseConfig)
+	recordsRepository := repositories.NewRecordsRepository(clickhouseConnection)
+	sqlHandler := sql.NewSQLHandler(recordsRepository)
+	privateRouter := router.NewPrivateRouter(apiKeyValidator, sqlHandler)
 	healthCheckHandler := health_check_handler.NewHealthCheckHandler()
 	readyCheckHandler := ready_check_handler.NewReadyCheckHandler()
 	publicRouter := router.NewPublicRouter(healthCheckHandler, readyCheckHandler)
 	swaggerRouter := router.NewSwaggerRouter()
-	server := NewApp(appConfig, errorsHandler, privateRouter, publicRouter, swaggerRouter)
+	server := NewApp(appConfig, errorsHandler, privateRouter, publicRouter, swaggerRouter, clickhouseConnection)
 	return server, nil
 }
 
